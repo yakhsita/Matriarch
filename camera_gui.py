@@ -1,96 +1,104 @@
-# camera_gui.py
-# GUI for capturing photos/videos from Raspberry Pi camera
-# Works perfectly inside VNC desktop environment
-
-import tkinter as tk
-from tkinter import messagebox
 import cv2
+import subprocess
+import numpy as np
+import tkinter as tk
 from PIL import Image, ImageTk
-import time
-import threading
+import datetime, os, threading, time
 
-# Initialize camera
-cap = cv2.VideoCapture(0)
-cap.set(3, 1280)  # Width
-cap.set(4, 720)   # Height
-cap.set(5, 60)    # FPS
+# Ensure Pictures folder exists
+os.makedirs("/home/pi/Pictures", exist_ok=True)
 
-# GUI setup
+# --- CAMERA SETTINGS ---
+WIDTH = 600
+HEIGHT = 400
+FPS = 60  # Increase FPS target here (keep resolution same)
+QUALITY = 85  # Slightly higher quality helps reduce artifacts
+
+# --- RPi Camera command ---
+command = [
+    "rpicam-vid",
+    "-t", "0",                   # run forever
+    "--inline",                  # MJPEG inline stream
+    "--codec", "mjpeg",          # MJPEG codec
+    "-n",                        # no preview
+    "-o", "-",                   # output to stdout
+    "--width", str(WIDTH),
+    "--height", str(HEIGHT),
+    "--framerate", str(FPS),
+    "--quality", str(QUALITY)
+]
+
+# Start process with big buffer (helps at 60 FPS)
+proc = subprocess.Popen(command, stdout=subprocess.PIPE, bufsize=2**22)
+
+# Tkinter setup
 window = tk.Tk()
-window.title("📸 Raspberry Pi Camera GUI")
-window.geometry("900x700")
-window.configure(bg="#222")
+window.title(f"Raspberry Pi Camera GUI ({WIDTH}x{HEIGHT}@{FPS}fps)")
+label = tk.Label(window)
+label.pack()
 
-video_label = tk.Label(window, bg="#222")
-video_label.pack(pady=10)
+last_frame = None
+frame_lock = threading.Lock()
 
-recording = False
-out = None
+def capture_thread():
+    """Continuously read frames in background thread"""
+    global last_frame
+    data = b""
+    while True:
+        chunk = proc.stdout.read(4096)
+        if not chunk:
+            break
+        data += chunk
+        while b'\xff\xd9' in data:  # handle multiple frames quickly
+            jpeg_end = data.index(b'\xff\xd9') + 2
+            jpeg = data[:jpeg_end]
+            data = data[jpeg_end:]
+            arr = np.frombuffer(jpeg, dtype=np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is not None:
+                with frame_lock:
+                    last_frame = frame
 
-# Update frame continuously
-def update_frame():
-    global frame
-    ret, frame = cap.read()
-    if ret:
-        cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = Image.fromarray(cv2image)
-        imgtk = ImageTk.PhotoImage(image=img)
-        video_label.imgtk = imgtk
-        video_label.configure(image=imgtk)
-    window.after(15, update_frame)  # 15 ms delay ≈ 60 FPS
+def update_gui():
+    """Show frame on GUI (non-blocking)"""
+    start = time.time()
+    with frame_lock:
+        frame = last_frame.copy() if last_frame is not None else None
+    if frame is not None:
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = ImageTk.PhotoImage(Image.fromarray(frame_rgb))
+        label.config(image=img)
+        label.image = img
 
-# Capture photo
+    # Dynamically adjust refresh rate for smoothness
+    elapsed = time.time() - start
+    delay = max(1, int((1000/FPS) - (elapsed * 1000)))
+    label.after(delay, update_gui)
+
 def capture_photo():
-    ret, frame = cap.read()
-    if ret:
-        filename = f"/home/pi/Pictures/photo_{int(time.time())}.jpg"
+    """Save latest frame"""
+    with frame_lock:
+        frame = last_frame.copy() if last_frame is not None else None
+    if frame is not None:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"/home/pi/Pictures/photo_{timestamp}.jpg"
         cv2.imwrite(filename, frame)
-        messagebox.showinfo("Saved", f"📷 Photo saved as:\n{filename}")
+        print(f"?? Saved: {filename}")
 
-# Start/Stop video recording
-def toggle_record():
-    global recording, out
-    if not recording:
-        filename = f"/home/pi/Videos/video_{int(time.time())}.avi"
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        out = cv2.VideoWriter(filename, fourcc, 60.0, (1280, 720))
-        recording = True
-        record_button.config(text="⏹ Stop Recording", bg="#c33")
-        threading.Thread(target=record_video, daemon=True).start()
-    else:
-        recording = False
-        record_button.config(text="⏺ Start Recording", bg="#3c3")
-
-# Recording process
-def record_video():
-    global recording, out
-    while recording:
-        ret, frame = cap.read()
-        if ret:
-            out.write(frame)
-    out.release()
-    messagebox.showinfo("Saved", "🎞️ Video saved successfully!")
-
-# Exit cleanly
 def on_close():
-    global recording
-    recording = False
-    cap.release()
+    """Close safely"""
+    proc.terminate()
     window.destroy()
 
-# Buttons
-btn_frame = tk.Frame(window, bg="#222")
-btn_frame.pack(pady=20)
+# Button
+btn = tk.Button(window, text="Capture Photo", command=capture_photo)
+btn.pack(pady=10)
 
-photo_button = tk.Button(btn_frame, text="📷 Capture Photo", command=capture_photo, font=("Arial", 14), bg="#3c3", fg="white", width=18)
-photo_button.grid(row=0, column=0, padx=10)
+# Start background thread for reading frames
+thread = threading.Thread(target=capture_thread, daemon=True)
+thread.start()
 
-record_button = tk.Button(btn_frame, text="⏺ Start Recording", command=toggle_record, font=("Arial", 14), bg="#3c3", fg="white", width=18)
-record_button.grid(row=0, column=1, padx=10)
-
-exit_button = tk.Button(btn_frame, text="❌ Exit", command=on_close, font=("Arial", 14), bg="#c33", fg="white", width=18)
-exit_button.grid(row=0, column=2, padx=10)
-
-update_frame()
+# Run GUI
 window.protocol("WM_DELETE_WINDOW", on_close)
+update_gui()
 window.mainloop()
