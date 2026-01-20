@@ -1,3 +1,13 @@
+#To eshtablish a connection
+ssh pi@10.106.61.107         syntax: ssh username@[IP_ADDRESS]
+or
+ssh pi@raspberrypi.local       syntax: ssh username@YOUR_HOSTNAME.local
+    # if the second command doesn't work then use this command
+        command: ssh-keygen -R raspberrypi.local
+NOTE:username="pi"
+     password="raspberry"
+
+#continue for camera 
 sudo apt update
 
 sudo apt install -y python3-picamera2 python3-opencv
