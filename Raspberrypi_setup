@@ -7,15 +7,14 @@ ssh pi@raspberrypi.local       syntax: ssh username@YOUR_HOSTNAME.local
 NOTE:username="pi"
      password="raspberry"
 
+#to check temp&throttle
+watch -n 2 vcgencmd measure_temp
+watch -n 2 vcgencmd get_throttled
+
+
 #continue for camera 
 sudo apt update
-
 sudo apt install -y python3-picamera2 python3-opencv
-
 sudo apt install -y python3-opencv python3-numpy
-
 sudo apt install -y python3-picamera2 python3-opencv python3-tk
-
 sudo apt install -y python3-pil python3-pil.imagetk
-
-ssh-keygen -R raspberrypi.local
