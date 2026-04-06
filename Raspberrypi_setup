@@ -18,3 +18,8 @@ sudo apt install -y python3-picamera2 python3-opencv
 sudo apt install -y python3-opencv python3-numpy
 sudo apt install -y python3-picamera2 python3-opencv python3-tk
 sudo apt install -y python3-pil python3-pil.imagetk
+
+#RPI Connect setup
+sudo apt install rpi-connect
+rpi-connect on
+rpi-connect signin
