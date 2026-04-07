@@ -28,6 +28,8 @@ rpi-connect signin
 #Connecting RPI to a new network while the old network is there
 sudo nmcli dev wifi list
 sudo nmcli --ask dev wifi connect 'Goonbuddies' password afnaan123 name "Gooning"          #for a password w/ spaces use "", ex: "afnaan 123"
+                            or
+sudo nmcli --ask dev wifi connect 'Goonbuddies' password afnaan123 name "Gooning" hidden yes     # if ur wifi is hidden
 ctrl + D       # to disconnect w/ rpi
 (also, switch off ur network)
 nmcli --fields autoconnect-priority,name connection        # to check all connections priority list
