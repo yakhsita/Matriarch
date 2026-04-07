@@ -23,3 +23,12 @@ sudo apt install -y python3-pil python3-pil.imagetk
 sudo apt install rpi-connect
 rpi-connect on
 rpi-connect signin
+
+
+#Connecting RPI to a new network while the old network is there
+sudo nmcli dev wifi list
+sudo nmcli --ask dev wifi connect 'Goonbuddies' password afnaan123 name "Gooning"          #for a password w/ spaces use "", ex: "afnaan 123"
+ctrl + D       # to disconnect w/ rpi
+(also, switch off ur network)
+nmcli --fields autoconnect-priority,name connection        # to check all connections priority list
+sudo nmcli connection modify "Gooning" connection.autoconnect-priority 25    #or whichever no. is higher
